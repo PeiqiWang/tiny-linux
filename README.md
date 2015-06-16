@@ -240,7 +240,7 @@ init程序首先会访问`etc/inittab`文件，因此，我们需要编写initta
         cd my-linux/ramdisk
         find . -print0 | cpio --null -ov --format=newc | gzip -9 > my-linux/obj/initramfs.cpio.gz   
 
-`initramfs.cpio.gz`就是我们的根文件系统，位于`my-linux/obj/`中。拥有了linux内核镜像和文件系统，我们可以使用qemu来运行linux了
+`initramfs.cpio.gz`就是我们的根文件系统，位于`my-linux/obj/`中。拥有了linux内核镜像和文件系统，我们可以使用qemu来运行linux了,**注意`bzImage`和`initramfs.cpio.gz`均位于当前运行目录之下**。
 
         cd my-linux/obj
         qemu-system-x86_64 -kernel bzImage -initrd initramfs.cpio.gz
@@ -262,20 +262,64 @@ init程序首先会访问`etc/inittab`文件，因此，我们需要编写initta
         
 在输出的信息中可以看到`eth0`，则说明网卡可以正常工作。
 
+####Qemu使用小贴士####
+linux系统启动后，可以使用`ctrl + a`的方式进入qemu monitor,qemu软件提供了很强大的[调试功能和命令](http://www.ibm.com/developerworks/cn/linux/l-cn-qemu-monitor/),有助于大家在发生异常时进行内核的单步调试。
+
+实际上，qemu也提供无图形界面的启动方式，通过TTY将输出重定义到当前终端，命令如下：
+
+        qemu-system-x86_64 -kernel bzImage -initrd initramfs.cpio.gz -append "console=ttyS0" -nographic
+
 ####Q & A####
+* 启动linux内核时报错`Kernel panic at boot: not syncing. No init found.`
+
+> 可能有如下原因：
+> + busybox需要静态编译，注意在menuconfig中设置
+> + init文件是通过软连接到busybox，不能通过复制的方式产生。
+
+* 没有`/proc /sys /dev`文件夹
+
+> 这些文件夹不是busybox自动生成的，需要自己在`my-linux/ramdisk/`目录下创建
+
+* linux内核启动后，`/proc`等文件夹下为空
+
+> 文件系统没有正确挂载，检查`etc/fstab`以及`etc/rcS`文件是否编写正确
+
+* 运行`ifconfig -a`命令时报错`/proc/net/dev: No such file or directory`
+
+> 文件系统没有正确挂载，检查`etc/fstab`以及`etc/rcS`文件是否编写正确
+
 * 找不到`eth0`
 
 > 可能有以下几个原因
 > + busybox的配置中没有使能网卡
->     重新运行 `make O=../busybox defconfig`，采用busybox默认设置。如仍不能解决问题，查看busybox是否为最新版本。
-> + linux中没有开启网卡的driver
->     
 
-####补充内容####
-> 上述配置采用了busybox的默认配置，生成的文件系统比较大，但是拥有较多的功能。[这里](http://blog.csdn.net/ancjf/article/details/42172847)可以提供一个最简的busybox配置方法，削减了很多功能，但是按照这种配置方法可能会出现无法找到eth0的问题，因为配置中没有使能网卡。有兴趣的同学可以再继续深入研究busybox的配置问题。
+>     重新运行 `make O=../busybox defconfig`，采用busybox默认设置。如仍不能解决问题，查看busybox是否为最新版本。
+
+> + linux中没有开启网卡的driver
+
+>     在`my-linux/linux-4.0.4`下运行如下命令
+                
+>               make O=../obj/linux-defconfig menuconfig
+
+>  查找如下配置并将其开启
+
+>               Device Drivers --> 
+>                       Network device --> 
+>                               Ethernet driver support --> Intel(R) PRO/1000 PCI Gigabit Ethernet support
+
+> + qemu配置不当
+
+>       可以尝试更新一下版本
+
+
+
+####补充说明####
+> 上述配置采用了busybox的默认配置，生成的文件系统比较大，但是拥有较多的功能。[这里](http://blog.csdn.net/ancjf/article/details/42172847)可以提供一个最简的busybox配置生成initrd文件系统的方法，削减了很多功能，但是按照这种配置方法可能会出现无法找到eth0的问题，因为配置中没有使能网卡。有兴趣的同学可以再继续深入研究busybox的配置问题。
 
 
 ##网络连接##
+
+
 ##linux内核裁剪##
 ##将应用程序运行在内核态##
 
