@@ -553,7 +553,62 @@ linux内核通常用于嵌入式系统的开发，因此配置文件中提供了
 
 ##将应用程序运行在内核态##
 
+首先，我们需要明白什么是内核态和用户态。这里我给出一个比较简明的[博客](http://www.cnblogs.com/zemliu/p/3695503.html),在这里就不做详细的赘述。
 
+将应用程序运行在内核态，用户程序可以直接访问内核地址空间，减少一些不必要的开销，如系统调用等，从而提升程序运行时间。与普通内核模块相比，运行在内核态的用户程序和其他进程一样，正常的执行调度和页面管理等。用户程序拥有特权级0，看似会给系统带来漏洞，但实际上有很多种方法可以保证内核的安全性，如静态类型检查、软件故障隔离等方法。
+
+[Kernel Mode Linux](http://web.yl.is.s.u-tokyo.ac.jp/~tosh/kml/)就是实现了这种功能，提供了对应于不同版本的linux内核的补丁。这里我们就利用KML技术来实现将应用程序运行在内核态。
+
+下载[补丁](https://github.com/ChildIsTalent/tiny-linux/blob/master/patched/kml_4.0_001.diff)并解压
+
+        cd my-linux
+        curl http://web.yl.is.s.u-tokyo.ac.jp/~tosh/kml/kml/for4.x/kml_4.0_001.diff.gz | gunzip 
+
+如果提示错误，找不到gunzip，则使用命令安装该解压软件
+
+        sudo apt-get install gunzip
+        
+我们使用KML的补丁对linux-4.0.4进行修改
+
+        cp -r linux-4.0.4/ patched-linux/
+        cp kml_4.0_001.diff patched-linux/
+        
+        patch -p1 < ../kml_4.0_001.diff
+
+这时会报错
+
+        Hunk #1 FAILED at 1.
+        1 out of 1 hunk FAILED -- saving rejects to file Makefile.rej
+        
+这是因为内核版本不匹配，导致Makefile无法被打补丁。因此，我们选择手动修改Makefile. 出错信息存储在Makefile.rej文件中
+```
+--- Makefile
++++ Makefile
+@@ -1,7 +1,7 @@
+ VERSION = 4
+ PATCHLEVEL = 0
+ SUBLEVEL = 0
+-EXTRAVERSION =
++EXTRAVERSION = -kml
+ NAME = Hurr durr I'ma sheep
+```
+
+在比对内核源码当中的Makefile文件,发现出现了版本号不匹配的问题，一种方式是修改Makefile，将SUBLEVEl修改为0，另一种方式修改kml.patch，将SUBLEVEL修改为4。
+
+patch -R -p1 < ../kml.patch   #取消之前打过的补丁
+patch -p1    < ../kml.patch
+执行make menuconfig， 勾选上对应的选项
+
+Kernel Mode Linux  --->
+[*] Kernel Mode Linux           
+[*]   Check for chroot (NEW)      
+    *** Safety check have not been implemented *** 
+最后重新编译内核即可。
+
+        
+
+
+        
 
 
 
