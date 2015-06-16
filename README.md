@@ -170,7 +170,7 @@
 
 * 设置初始化进程init
 
-init 是程序运行的第一个程序，这里我们运行的就是busybox程序，采用软链接的形式
+init 是程序运行的第一个程序，这里我们运行的就是busybox程序，采用符号链接的形式
 
         cd ramdisk
         ln -s bin/busybox init
@@ -274,7 +274,7 @@ linux系统启动后，可以使用`ctrl + a`的方式进入qemu monitor,qemu软
 
 > 可能有如下原因：
 > + busybox需要静态编译，注意在menuconfig中设置
-> + init文件是通过软连接到busybox，不能通过复制的方式产生。
+> + init文件是通过符号连接到busybox，不能通过复制的方式产生。
 
 * 没有`/proc /sys /dev`文件夹
 
@@ -553,13 +553,15 @@ linux内核通常用于嵌入式系统的开发，因此配置文件中提供了
 
 ##将应用程序运行在内核态##
 
+###使用KML打补丁###
+
 首先，我们需要明白什么是内核态和用户态。这里我给出一个比较简明的[博客](http://www.cnblogs.com/zemliu/p/3695503.html),在这里就不做详细的赘述。
 
 将应用程序运行在内核态，用户程序可以直接访问内核地址空间，减少一些不必要的开销，如系统调用等，从而提升程序运行时间。与普通内核模块相比，运行在内核态的用户程序和其他进程一样，正常的执行调度和页面管理等。用户程序拥有特权级0，看似会给系统带来漏洞，但实际上有很多种方法可以保证内核的安全性，如静态类型检查、软件故障隔离等方法。
 
 [Kernel Mode Linux](http://web.yl.is.s.u-tokyo.ac.jp/~tosh/kml/)就是实现了这种功能，提供了对应于不同版本的linux内核的补丁。这里我们就利用KML技术来实现将应用程序运行在内核态。
 
-下载[补丁](https://github.com/ChildIsTalent/tiny-linux/blob/master/patched/kml_4.0_001.diff)并解压
+下载[补丁](http://web.yl.is.s.u-tokyo.ac.jp/~tosh/kml/kml/for4.x/)并解压
 
         cd my-linux
         curl http://web.yl.is.s.u-tokyo.ac.jp/~tosh/kml/kml/for4.x/kml_4.0_001.diff.gz | gunzip 
@@ -592,20 +594,65 @@ linux内核通常用于嵌入式系统的开发，因此配置文件中提供了
 +EXTRAVERSION = -kml
  NAME = Hurr durr I'ma sheep
 ```
+因此我们手动更改Makefile文件的第4行，将其修改为
 
-在比对内核源码当中的Makefile文件,发现出现了版本号不匹配的问题，一种方式是修改Makefile，将SUBLEVEl修改为0，另一种方式修改kml.patch，将SUBLEVEL修改为4。
+        EXTRAVERSION = -kml
 
-patch -R -p1 < ../kml.patch   #取消之前打过的补丁
-patch -p1    < ../kml.patch
-执行make menuconfig， 勾选上对应的选项
+此时重新编译linux内核，执行`make menuconfig`，使能KML
 
-Kernel Mode Linux  --->
-[*] Kernel Mode Linux           
-[*]   Check for chroot (NEW)      
-    *** Safety check have not been implemented *** 
-最后重新编译内核即可。
+        Kernel Mode Linux  --->
+                [*] Kernel Mode Linux           
+                [*]   Check for chroot (NEW)      
+                *** Safety check have not been implemented *** 
 
+重新编译内核，生成[bzImage](https://github.com/ChildIsTalent/tiny-linux/blob/master/patched/finalImage)文件即可。
+
+在github代码中，我们给出了三个不同的bzImage，分别是：
+* [bzImage](https://github.com/ChildIsTalent/tiny-linux/blob/master/patched/bzImage)使用linux默认配置`defconfig`生成的支持KML的内核镜像
+* [finalImage](https://github.com/ChildIsTalent/tiny-linux/blob/master/patched/finalImage)使用最小配置生成的支持KML的内核镜像
+* [finalImage_fs](https://github.com/ChildIsTalent/tiny-linux/blob/master/patched/finalImage_fs)使用最小配置+使能伪文件系统的配置生成的支持KML的内核镜像
+
+各个镜像对应的config文件在`tiny-linux/patched/config_files`目录下
+
+###应用程序运行起来###
+
+根据KML官方的使用说明，只需将想要运行在内核态的应用程序放置在`/trusted`文件夹下即可。因此，我们需要对之前制作的ramdisk进行修改
+
+        cd my-linux
+        cp -r ramdisk/ patched-ramdisk/
+        cd patched-ramdisk
+        mkdir trusted
+        mv bin/busybox /trusted
+        ln -s /trusted/busybox /bin/busybox
+
+因为在`/bin以及/sbin`等文件夹下有着大量指向`/bin/busybox`的符号链接，因此我们只需创建一个链接`/bin/busybox`，将其指向真正的`/trusted/busybox`即可。
+
+这时修改完成，我们需要生成一个新的文件系统
+
+        find . -print0 | cpio --null -ov --format=newc | gzip -9 > my-linux/obj/initramfs-kml.cpio.gz
         
+####补充说明####
+
+课上陈老师指出，可以不用生成新的文件系统，只需要在linux内核启动后，在运行在内存的伪文件系统中进行相同的操作即可
+
+        mkdir trusted
+        mv bin/busybox /trusted
+        ln -s /trusted/busybox /bin/busybox
+
+###结果检测####
+
+助教给了一个可以检测结果的小程序
+```C
+#include <stdio.h>
+#include <stdint.h>
+
+int main() {
+    uint32_t cs;
+    asm volatile("mov %%cs, %0" : "=r" (cs));
+    printf("Privilege level: %x\n", cs & 0x3);
+    return 0;
+}
+```
 
 
         
