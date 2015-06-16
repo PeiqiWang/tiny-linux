@@ -367,6 +367,8 @@ linux系统启动后，可以使用`ctrl + a`的方式进入qemu monitor,qemu软
 
 **[最小配置](https://github.com/ChildIsTalent/tiny-linux/blob/master/original/config_file/config_final)**
 
+> [*] 64-bit kernel 
+
 > General setup
 
 > 这里我们必须的功能有:支持可以挂在initrd根文件系统；可以解压gzip格式的根文件系统；优化size（这个我们后续会再解释）；支持标准的kerne feature，该选项是因为后面使能PCI时，需要该配置的支持。
@@ -375,6 +377,13 @@ linux系统启动后，可以使用`ctrl + a`的方式进入qemu monitor,qemu软
 >       [*]   Support initial ramdisks compressed using gzip
 >       [*] Optimize for size 
 >       [*] Configure standard kernel features (expert users)  --->   
+
+> Executable file formats / Emulations ---> 
+
+> 对各种文件格式的支持
+
+>       Kernel support for ELF binaries 
+>       Kernel support for scripts starting with #!
 
 > Bus options
 
@@ -409,15 +418,49 @@ linux系统启动后，可以使用`ctrl + a`的方式进入qemu monitor,qemu软
 
 **1. 编译优化**
 
-在
+在上面的最小配置中，我们已经看到了如下选项
+
+        General setup
+               [*] Optimize for size
+               
+这是linux内核中自带的编译优化选项，可以对生成的bzImage的大小进行一定程度的优化。
 
 **2. 压缩优化**
+
+linux中提供了多种的bzImage压缩类型,如XXXXXX，
+
+        
+4.generl setup
+ Kernel compression mode (LZMA)  ---> 749.6
+ Kernel compression mode (XZ)  ---> 729.6
+
+
+默认使用的是GZIP模式，实际上采用
+
 **3. 嵌入式模式**
 
 
+
+Choose SLAB allocator (SLOB (Simple Allocator))  --->
+SLAB SLOB SLUB
+http://blog.csdn.net/adaptiver/article/details/7042469
+
+6. 嵌入式的那个选项变化已经不大了
 经过上述所有优化，最终的[bzImage](https://github.com/ChildIsTalent/tiny-linux/blob/master/original/finalImage)大小为726.5K，运行所需内存为21.6M。运行所需内存可以使用qemu的`-m`参数来指定。可以通过如下命令进行验证：
 
         qemu-system-x86_64 -m 21.6 -kernel bzImage -initrd initramfs.cpio.gz -append "console=ttyS0" -nographic
+
+####补充说明####
+> **File systems 配置**
+
+
+
+
+> **printk 与 DNS解析配置**
+5.关掉了printk
+关掉了dns解析（用ip地址即可）
+
+
 
 File systems（可选）
 
@@ -428,10 +471,40 @@ File systems  --->
         [*] /proc file system support   
 具体可以参考tiny_linx/configs/config_726K,通过该配置，编译出来的bzImage大小只有726K，使用qemu启动的时候，注意需要采用-append "console=ttyS0" -nographic方式，才能正常加载。
 
+3. 加上proc
+ > File systems > Pseudo filesystems 
+
+ /proc file system support ───────────────────────┐
+  │ (there is a small number of Interrupt ReQuest lines in your computer    │  
+  │ that are used by the attached devices to gain the CPU's attention --    │  
+  │ often a source of trouble if two devices are mistakenly configured      │  
+  │ to use the same IRQ). The program procinfo to display some              │  
+  │ information about your system gathered from the /proc file system.      │  
+  │                                                                         │  
+  │ Before you can use the /proc file system, it has to be mounted,         │  
+  │ meaning it has to be given a location in the directory hierarchy.       │  
+  │ That location should be /proc. A command such as "mount -t proc proc    │  
+  │ /proc" or the equivalent line in /etc/fstab does the job.               │  
+  │                                                                         │  
+  │ The /proc file system is explained in the file                          │  
+  │ <file:Documentation/filesystems/proc.txt> and on the proc(5) manpage    │  
+  │ ("man 5 proc"). 
+  │ This option will enlarge your kernel by about 67 KB. Several            │  
+  │ programs depend on this, so everyone should say Y here.                 │  
+  │                                                                         │  
+  │ Symbol: PROC_FS [=n]                                                    │  
+  │ Type  : boolean                                                         │  
+  │ Prompt: /proc file system support                                       │  
+  │   Location:                                                             │  
+  │     -> File systems                                                     │  
+  │       -> Pseudo filesystems                                             │  
+  │   Defined at fs/proc/Kconfig:1                   
 
 
 
 
+
+####Q & A####
 
 接下来就是进一步精简该选项当中的配置，围绕着网络驱动，TCP/IP通信支持，能够在网络设置、驱动设置当中去掉绝大部分的选项。
 
@@ -439,6 +512,23 @@ File systems  --->
 
 对于allnoconfig默认开启配置选项，也可以选择性进行关闭。
 
+
+driver移动问题
+
+
+
+7.移动内核
+ > Executable file formats / Emulations ─
+<M> Kernel support for scripts starting with #!  
+
+ > Device Drivers > Network device support > Ethernet driver support  
+ <M>     Intel(R) PRO/1000 Gigabit Ethernet support  
+
+ > Device Drivers > Character devices > Serial drivers
+ <M> 8250/16550 and compatible serial support 
+
+问题所在：
+[*]   Console on 8250/16550 and compatible serial port 
 
 
 
