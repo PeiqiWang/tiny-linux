@@ -125,7 +125,11 @@
         make -j8
         make install
         
-此时可以在`my-linux/obj/busybox/`中看到生成的`_install`目录。
+此时可以在`my-linux/obj/busybox/`中看到生成的`_install`目录。通过下面的命令可以验证busybox是否安装正确：
+
+        ./busybox ls
+
+若可以成功输出当前目录下的文件，这说明busybox已经成功安装。
 
 ####Q & A####
 * 在busybox中执行`make menuconfig`时报错缺少库文件
@@ -133,6 +137,13 @@
 > 需要安装依赖库
 
 >        sudo aptitab instab libncurses5-dev                                        
+
+* 在busybox中执行`make defconfig`或`make menuconfig`时提示`keep source code clean`
+
+> 这种情况通常出现在多次编译busybox时，因为上次编译只有有残留的配置文件，会影响到本次的编译。我们只需按照错误提示进入到源代码文件夹下进行清理就可以了
+
+>       cd my-linux/busybox-1.23.2
+>       make mrproper
 
 * 编译配置文件执行`make -j8`时报错inetd.c未定义
 
@@ -142,6 +153,102 @@
 >       [ ] inetd
 
 ###生成initrd###
+
+到目前为止，我们已经安装配置了busybox，接下来我们将使用该工具生成启动linux内核所必须的RAM Disk，即initrd。通过之前的分析，我们需要对初始进程和daemon进行设置。同样地，为了后续的调试方便和版本控制，我们将busybox生成的`_install`目录复制到其他位置。
+
+        cd my-linux
+        mkdir ramdisk
+        cp -r obj/busybox/_install/* ramdisk/
+
+* 设置初始化进程init
+
+init 是程序运行的第一个程序，这里我们运行的就是busybox程序，采用软链接的形式
+
+        cd ramdisk
+        ln -s bin/busybox init
+        
+* 设置开机启动程序
+
+首先，我们需要先设定一些程序运行所需要的文件夹
+
+        mkdir -pv {bin,sbin,etc,proc,sys,usr/{bin,sbin},dev}
+        
+init程序首先会访问`etc/inittab`文件，因此，我们需要编写inittab，指定开机需要启动的所有程序
+
+        cd etc
+        vim inittab
+        
+[inittab](https://github.com/ChildIsTalent/tiny-linux/blob/master/ramdisk/etc/inittab)文件的内容如下所示：
+
+        ::sysinit:/etc/init.d/rcS
+        
+        ::askfirst:-/bin/sh
+        
+        ::restart:/sbin/init
+        
+        ::ctrlaltdel:/sbin/reboot
+        
+        ::shutdown:/bin/umount -a -r
+        
+        ::shutdown:/sbin/swapoff -a
+
+* 编写系统初始化命令
+
+从inittab文件中可以看出，首先执行的是`/etc/init.d/rcS`脚本，因此，我们生成初始化脚本
+
+        mkdir init.d
+        cd init.d
+        vim rcS
+
+[rcS](https://github.com/ChildIsTalent/tiny-linux/blob/master/ramdisk/etc/init.d/rcS)文件的内容如下所示：
+
+        #!/bin/sh
+        
+        mount proc
+        mount -o remount,rw /
+        mount -a
+        
+        clear                               
+        echo "My Tiny Linux Start :D ......"
+
+将脚本文件赋予可执行的权限
+
+        chmod +x rcS
+        
+在rcS脚本中，`mount -a` 是自动挂载 `/etc/fstab` 里面的东西，可以理解为挂在文件系统，因此我们还需要编写 `fstab`文件来设置我们的文件系统。
+
+        cd ramdisk/etc/
+        vim fstab
+        
+[fstab](https://github.com/ChildIsTalent/tiny-linux/blob/master/ramdisk/etc/fstab)文件内容如下：
+
+        # /etc/fstab
+        proc            /proc        proc    defaults          0       0
+        sysfs           /sys         sysfs   defaults          0       0
+        devtmpfs        /dev         devtmpfs  defaults          0       0
+
+至此，我们已经完成了RAM Disk中相关文件的配置，可以压缩生成文件镜像了
+
+        cd my-linux/ramdisk
+        find . -print0 | cpio --null -ov --format=newc | gzip -9 > my-linux/obj/initramfs.cpio.gz   
+
+`initramfs.cpio.gz`就是我们的根文件系统，位于`my-linux/obj/`中。拥有了linux内核镜像和文件系统，我们可以使用qemu来运行linux了
+
+        cd my-linux/obj
+        qemu-system-x86_64 -kernel bzImage -initrd initramfs.cpio.gz
+        
+这时qemu上会显示出内核打印的各种信息，最终显示：
+
+        My Tiny Linux Start :D ......
+        Please press Enter to activate this console.
+        
+按`Enter`键后，就可以进入到文件系统中，运行命令
+
+        ls /dev
+        ls /proc
+        ls /sys
+
+可以看到各个文件夹下面都不为空，也就意味着`rcS`文件成功的访问了`fstab`文件，挂载了我们设置的文件系统。
 
 
 ##网络连接##
