@@ -48,7 +48,7 @@
 
 通过上述的分析，我们基本上清楚了linux内核的作用以及根文件系统initrd应该如何构建。因此我们的实验思路如下：
 + [编译生成linux内核bzImahe](#jump)
-<span id="jump">a</span>
+
 + 构建生成initrd根文件系统
 + 实现实验要求功能的设置
 + 对linux内核进行裁剪
@@ -71,4 +71,4 @@
 
 
 
-a
+<span id="jump">a</span>
