@@ -47,8 +47,7 @@
 > 开机启动程序加载完毕以后，就要让用户登录了,打开login shell，整个linux启动的流程就结束了，自此用户直接与操作系统通过命令行或图形界面等方式进行交互。 
 
 通过上述的分析，我们基本上清楚了linux内核的作用以及根文件系统initrd应该如何构建。因此我们的实验思路如下：
-+ [编译生成linux内核bzImahe](#jump)
-
++ 编译生成linux内核bzImahe
 + 构建生成initrd根文件系统
 + 实现实验要求功能的设置
 + 对linux内核进行裁剪
@@ -57,6 +56,27 @@
 接下来我们将给出详细的实验过程和步骤。
 
 ##编译 linux-4.0.4##
+首先我们建立一个新的工程文件
+        mkdir my-linux
+        cd my-linux
+下载所需要的linux内核，我们使用的是[linux-4.0.4]（https://www.kernel.org/）版本的内核，现在最新版本的是4.0.5。可以选择手动下载，解压后放置在'my-linux/'目录下，也可以选择使用命令行的方式
+        sudo apt-get install curl
+        curl https://www.kernel.org/pub/linux/kernel/v4.x/linux-4.0.4.tar.xz | tar xJf -
+现在你的'my-linux/'目录下包含了一个'linux-4.0.4'的文件夹，其中是编译生成bzImage的源文件。为了后面对linux内核进行裁剪时的版本控制和调试，我们选择将make生成的文件和源文件分开存放。因此，可以使用如下命令对linux内核进行编译：
+        mkdir obj
+        mkdir obj/linux-defconfig
+        cd linux-4.0.4
+        make O=../obj/linux-defconfig defconfig
+我们在'my-linux/obj/linux-defconig/'文件夹中存储了linux内核编译生成的Makefile等相应配置文件，采用的是默认的配置，其中'defconfige'默认为'x86_defconfig'，即生成的是64位内核文件，如需要生成32位内核文件，可以使用如下命令：
+        make O=../obj/linux-defconfig i386_defconfig
+这时我们对配置文件进行'make'就可以生成内核镜像，通过-j的参数指定编译时的线程数目
+        cd ../obj/linux-defconfig
+        make -j8
+编译成功后，会看到如下信息：
+> Kernel: arch/x86/boot/bzImage is ready  (#1)
+
+由此也可以看出，生成的bzImage的位置，为了便于操作，我们将其移动到'obj/'的目录下
+        cp arch/x86/boot/bzImage ../bzImage
 
 ##编译 RAM Disk##
 ##网络连接##
@@ -71,4 +91,3 @@
 
 
 
-<span id="jump">a</span>
