@@ -106,7 +106,7 @@
 
 [BusyBox](http://baike.baidu.com/view/1429588.htm)是一种很常用的linux内核编译所需的工具，集成了一百多个最常用linux命令和工具。BusyBox包含了一些简单的工具，例如ls、cat和echo等等，还包含了一些更大、更复杂的工具，例grep、find、mount以及telnet。有些人将 BusyBox 称为 Linux 工具里的瑞士军刀。简单的说BusyBox就好像是个大工具箱，它集成压缩了 Linux 的许多工具和命令，也包含了 Android 系统的自带的shell。
 
-下载busybox到`my-linux/`目录下
+下载[busybox](http://busybox.net)到`my-linux/`目录下
 
         cd my-linux
         curl http://busybox.net/downloads/busybox-1.23.2.tar.bz2 | tar xjf -
@@ -240,7 +240,7 @@ init程序首先会访问`etc/inittab`文件，因此，我们需要编写initta
         cd my-linux/ramdisk
         find . -print0 | cpio --null -ov --format=newc | gzip -9 > my-linux/obj/initramfs.cpio.gz   
 
-`initramfs.cpio.gz`就是我们的根文件系统，位于`my-linux/obj/`中。拥有了linux内核镜像和文件系统，我们可以使用qemu来运行linux了,**注意`bzImage`和`initramfs.cpio.gz`均位于当前运行目录之下**。
+`initramfs.cpio.gz`就是我们的根文件系统，位于`my-linux/obj/`中。拥有了linux内核镜像和文件系统，我们可以使用qemu来运行linux了,**注意bzImage和initramfs.cpio.gz均位于当前运行目录之下**。
 
         cd my-linux/obj
         qemu-system-x86_64 -kernel bzImage -initrd initramfs.cpio.gz
@@ -312,15 +312,140 @@ linux系统启动后，可以使用`ctrl + a`的方式进入qemu monitor,qemu软
 >       可以尝试更新一下版本
 
 
-
 ####补充说明####
 > 上述配置采用了busybox的默认配置，生成的文件系统比较大，但是拥有较多的功能。[这里](http://blog.csdn.net/ancjf/article/details/42172847)可以提供一个最简的busybox配置生成initrd文件系统的方法，削减了很多功能，但是按照这种配置方法可能会出现无法找到eth0的问题，因为配置中没有使能网卡。有兴趣的同学可以再继续深入研究busybox的配置问题。
 
+> 在我们启动的linux系统当中，因为busybox的支持，可以执行大部分常见的命令，如ls,top，grep等等。但是当退出qemu后，这些改变并不会写回到根文件系统镜像当中。这是因为在运行时，是将相应的文件系统加载到内存当中，所有的操作都是在内存中进行的操作，在退出后并不会将改变写回文件镜像。
 
 ##网络连接##
+实现网络连接的设置，我们需要在系统初始化命令中进行相应的设置，因此需要再次编写`etc/rcS`，增加如下内容：
 
+        /sbin/ifconfig lo 127.0.0.1 up
+        /sbin/route add 127.0.0.1 lo &
+        
+        ifconfig eth0 up
+        ip addr add 10.0.2.15/24 dev eth0
+        ip route add default via 10.0.2.2
+
+更改了`rcS`文件后，我们需要重新生成文件系统镜像，即重新运行如下命令
+
+        find . -print0 | cpio --null -ov --format=newc | gzip -9 > my-linux/obj/initramfs.cpio.gz   
+
+这样，我们就可以启动系统来验证是否可以实现网络连接。简单起见，我们采用与本地主机相连的方式来验证。在本地使用python搭建一个http服务器，默认端口为8000
+
+        python -m SimpleHTTPServer
+
+使用`ifconfig`获得本地主机的ip，以166.111.134.134为例，在启动的linux内核中执行命令
+
+        wget http://166.111.134.134:8000/file_name
+
+其中file_name为你开启http服务器时所在路径下存在的某一文件，若网络连接成功，则可以看到该文件上传到了我们启动的文件系统镜像中。
+
+####Q & A####
+* 找不到文件
+
+> 必须要保证要传输的文件和你开启http服务器时所在路径完全一致。
+
+* 网络连接失败
+
+> 在保证可以看到`eth0`的前提下，检查`rcS`是否正确更改，并且启动时使用的是更新后新的文件镜像
 
 ##linux内核裁剪##
+###配置选项裁剪###
+执行`make menuconfig`命令时，可以在配置见面中看到很多的linux内核配置选项，因为我们要实现一个功能极简的linux内核，所以其中绝大部分的功能是可以裁剪的。从每个选项的名称可以看出代表着内核的哪一部分功能，并且通过`</>`可以看到详细的功能说明。因此，我采用删掉一些功能后，进行编译生成内核镜像，测试是否仍能保证网络连接的方法一步一步进行裁剪。当熟悉了基本的流程和linux的各个功能部件后，我们可以使用如下命令
+
+        cd my-linux
+        mkdir obj/linux-prun
+        cd linux-4.0.4
+        
+        make =O../obj/linux-prun allnoconfig
+        make =O../obj/linux-prun menuconfig
+
+重新建一个文件夹`linux-prun`是方便于版本控制。使用`allnoconfig`之后你就会发现，配置菜单中所有的选项都被清空了，这时只需要选择必须的配置项即可。
+
+经过多次试验和测试，我得出了如下的最小配置：
+
+**[最小配置](https://github.com/ChildIsTalent/tiny-linux/blob/master/original/config_file/config_final)**
+
+> General setup
+
+> 这里我们必须的功能有:支持可以挂在initrd根文件系统；可以解压gzip格式的根文件系统；优化size（这个我们后续会再解释）；支持标准的kerne feature，该选项是因为后面使能PCI时，需要该配置的支持。
+
+>       [*] Initial RAM filesystem and RAM disk (initramfs/initrd) support
+>       [*]   Support initial ramdisks compressed using gzip
+>       [*] Optimize for size 
+>       [*] Configure standard kernel features (expert users)  --->   
+
+> Bus options
+
+>       [*] PCI support  
+
+> Networking support
+
+> 我们选择TCP/IP的通信连接方式
+
+>       [*] TCP/IP networking    
+
+> Device Drivers
+
+> 这里是我们所需的各部件驱动的配置：网卡驱动；字符设备驱动；串口驱动。我们最终选择费图形界面的方式运行linux内核，因为使用TTY重定向的方式，只需要串口驱动和字符设备驱动即可，可以最小化生成的内核。
+
+>       [*] Network device support  --->  
+>               [*] Ethernet driver support  --->   
+>                       [*] Intel devices
+>                         [*] Intel(R) PRO/1000 Gigabit Ethernet support
+
+>        Character devices  ---> 
+>                   [*] Enable TTY 
+>        Serial drivers  ---> 
+>               [*] 8250/16550 and compatible serial support
+>               [ ]   Support 8250_core.* kernel options (DEPRECATED)
+>               [*]   Console on 8250/16550 and compatible serial port
+>               [*]   8250/16550 PCI device support
+>               (4)   Maximum number of 8250/16550 serial ports       
+>               (4)   Number of 8250/16550 serial ports to register at runtime 
+
+###系统自带优化###
+
+**+ 编译优化**
+
+在
+
+**+ 压缩优化**
+**+ 嵌入式模式**
+
+
+经过上述所有优化，最终的[bzImage](https://github.com/ChildIsTalent/tiny-linux/blob/master/original/finalImage)大小为726.5K，运行所需内存为21.6M。运行所需内存可以使用qemu的`-m`参数来指定。可以通过如下命令进行验证：
+
+        qemu-system-x86_64 -m 21.6 -kernel bzImage -initrd initramfs.cpio.gz -append "console=ttyS0" -nographic
+
+File systems（可选）
+
+如果想支持top，ps等相关命令，需要开启该选项，开启后，bzImage大小将由886K变为930K
+
+File systems  --->   
+    Pseudo filesystems  --->   
+        [*] /proc file system support   
+具体可以参考tiny_linx/configs/config_726K,通过该配置，编译出来的bzImage大小只有726K，使用qemu启动的时候，注意需要采用-append "console=ttyS0" -nographic方式，才能正常加载。
+
+
+
+
+
+
+接下来就是进一步精简该选项当中的配置，围绕着网络驱动，TCP/IP通信支持，能够在网络设置、驱动设置当中去掉绝大部分的选项。
+
+在开启某一选项的过程中，会出现一些自动打开的选项，对于这些选项，也可以选择性进行关闭。
+
+对于allnoconfig默认开启配置选项，也可以选择性进行关闭。
+
+
+
+
+
+
+
+
 ##将应用程序运行在内核态##
 
 
