@@ -64,9 +64,9 @@
 下载所需要的linux内核，我们使用的是[linx-4.0.4](https://www.kernel.org/)版本的内核，现在最新版本的是4.0.5。可以选择手动下载，解压后放置在`my-linux/`目录下，也可以选择使用命令行的方式
 
         sudo apt-get install curl
-        curl https://www.kernel.org/pub/linux/kernel/v4.x/linux-4.0.4.tar.xz | tar xJf -
+        curl https://www.kernel.org/pub/linux/kernel/v4.x/linux-4.0.4.tar.xz | tar xjf -
 
-现在你的`my-linux/`目录下包含了一个`linux-4.0.4/`的文件夹，其中是编译生成bzImage的源文件。为了后面对linux内核进行裁剪时的版本控制和调试，我们选择将make生成的文件和源文件分开存放。因此，可以使用如下命令对linux内核进行编译：
+现在你的`my-linux/`目录下包含了一个`linux-4.0.4/`的文件夹，其中是可以编译生成bzImage的源文件。为了后面对linux内核进行裁剪时的版本控制和调试，我们选择将make生成的文件和源文件分开存放。因此，可以使用如下命令对linux内核进行编译：
 
         mkdir obj
         mkdir obj/linux-defconfig
@@ -93,6 +93,50 @@
 至此，我们已经成功编译生成了一个内核镜像文件[bzImage](https://github.com/ChildIsTalent/tiny-linux/blob/master/original/bzImage),采用默认设置时其大小约为6M。
 
 ##编译 RAM Disk##
+
+###使用BusyBox###
+
+[BusyBox](http://baike.baidu.com/view/1429588.htm)是一种很常用的linux内核编译所需的工具，集成了一百多个最常用linux命令和工具。BusyBox包含了一些简单的工具，例如ls、cat和echo等等，还包含了一些更大、更复杂的工具，例grep、find、mount以及telnet。有些人将 BusyBox 称为 Linux 工具里的瑞士军刀。简单的说BusyBox就好像是个大工具箱，它集成压缩了 Linux 的许多工具和命令，也包含了 Android 系统的自带的shell。
+
+下载busybox到`my-linux/`目录下
+
+        cd my-linux
+        curl http://busybox.net/downloads/busybox-1.23.2.tar.bz2 | tar xjf -
+
+现在你的`my-linux/`目录下包含了一个`busybox-1.23.2/`的文件夹，同样地，为了后续的调试，我们选择将make生成的文件和源文件分开存放
+
+        mkdir obj/busybox
+        cd busybox-1.23.2
+        make O=../obj/busybox defconfig
+        
+修改配置，使用静态编译busybox，否则在程序运行期间需要对相应的库进行动态加载，那么在根文件系统中则需要提供其所需的共享库。
+
+        make O=../obj/busybox/ menuconfig
+
+进入图形界面，选择
+
+        -> Busybox Settings                                        
+                -> Build Options     
+                 [*] Build BusyBox as a static binary (no shared libs)         
+        
+现在编译生成的Makefile等配置文件即可
+
+        cd ../obj/busybox/
+        make -j8
+        make install
+        
+此时可以在`my-linux/obj/busybox/`中看到生成的`_install`目录。
+
+####Q & A####
+* 在busybox中执行`make menuconfig`时报错
+  
+需要安装依赖库
+
+        sudo aptitab instab libncurses5-dev                                        
+
+###生成initrd###
+
+
 ##网络连接##
 ##linux内核裁剪##
 ##将应用程序运行在内核态##
