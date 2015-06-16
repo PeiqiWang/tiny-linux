@@ -407,12 +407,12 @@ linux系统启动后，可以使用`ctrl + a`的方式进入qemu monitor,qemu软
 
 ###系统自带优化###
 
-**+ 编译优化**
+**1. 编译优化**
 
 在
 
-**+ 压缩优化**
-**+ 嵌入式模式**
+**2. 压缩优化**
+**3. 嵌入式模式**
 
 
 经过上述所有优化，最终的[bzImage](https://github.com/ChildIsTalent/tiny-linux/blob/master/original/finalImage)大小为726.5K，运行所需内存为21.6M。运行所需内存可以使用qemu的`-m`参数来指定。可以通过如下命令进行验证：
