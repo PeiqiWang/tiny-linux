@@ -92,6 +92,14 @@
 
 至此，我们已经成功编译生成了一个内核镜像文件[bzImage](https://github.com/ChildIsTalent/tiny-linux/blob/master/original/bzImage),采用默认设置时其大小约为6M。
 
+####Q & A####
+* 在linux中执行`make defconfig`时提示`keep source code clean`
+
+> 这种情况通常出现在多次编译linux内核时，因为上次编译只有有残留的配置文件，会影响到本次的编译。我们只需按照错误提示进入到源代码文件夹下进行清理就可以了
+
+>       cd my-linux/linux-4.0.4
+>       make mrproper
+
 ##编译 RAM Disk##
 
 ###使用BusyBox###
@@ -248,7 +256,23 @@ init程序首先会访问`etc/inittab`文件，因此，我们需要编写initta
         ls /proc
         ls /sys
 
-可以看到各个文件夹下面都不为空，也就意味着`rcS`文件成功的访问了`fstab`文件，挂载了我们设置的文件系统。
+可以看到各个文件夹下面都不为空，也就意味着`rcS`文件成功的访问了`fstab`文件，挂载了我们设置的文件系统。为了实现网络连接，我们首先要验证网卡是否正常工作
+
+        ifconfig -a
+        
+在输出的信息中可以看到`eth0`，则说明网卡可以正常工作。
+
+####Q & A####
+* 找不到`eth0`
+
+> 可能有以下几个原因
+> + busybox的配置中没有使能网卡
+>     重新运行 `make O=../busybox defconfig`，采用busybox默认设置。如仍不能解决问题，查看busybox是否为最新版本。
+> + linux中没有开启网卡的driver
+>     
+
+####补充内容####
+> 上述配置采用了busybox的默认配置，生成的文件系统比较大，但是拥有较多的功能。[这里](http://blog.csdn.net/ancjf/article/details/42172847)可以提供一个最简的busybox配置方法，削减了很多功能，但是按照这种配置方法可能会出现无法找到eth0的问题，因为配置中没有使能网卡。有兴趣的同学可以再继续深入研究busybox的配置问题。
 
 
 ##网络连接##
