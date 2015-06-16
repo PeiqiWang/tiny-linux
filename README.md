@@ -369,14 +369,19 @@ linux系统启动后，可以使用`ctrl + a`的方式进入qemu monitor,qemu软
 
 > [*] 64-bit kernel 
 
-> General setup
+> General setup --->
 
-> 这里我们必须的功能有:支持可以挂在initrd根文件系统；可以解压gzip格式的根文件系统；优化size（这个我们后续会再解释）；支持标准的kerne feature，该选项是因为后面使能PCI时，需要该配置的支持。
+> 这里我们必须的功能有:支持可以挂在initrd根文件系统；可以解压gzip格式的根文件系统；优化size（这个我们后续会再解释）；支持标准的kerne feature，该选项是因为后面使能PCI时，才会出现PCI支持的相应配置。
 
 >       [*] Initial RAM filesystem and RAM disk (initramfs/initrd) support
 >       [*]   Support initial ramdisks compressed using gzip
 >       [*] Optimize for size 
->       [*] Configure standard kernel features (expert users)  --->   
+>       [*] Configure standard kernel features (expert users)  --->
+>               [*] Enable PCI quitk workarounds
+
+> Bus options --->
+
+>       [*] PCI support  
 
 > Executable file formats / Emulations ---> 
 
@@ -385,34 +390,33 @@ linux系统启动后，可以使用`ctrl + a`的方式进入qemu monitor,qemu软
 >       Kernel support for ELF binaries 
 >       Kernel support for scripts starting with #!
 
-> Bus options
-
->       [*] PCI support  
-
-> Networking support
+> Networking support --->
 
 > 我们选择TCP/IP的通信连接方式
 
->       [*] TCP/IP networking    
+>       Networking options --->
+>               [*] TCP/IP networking    
 
-> Device Drivers
+> Device Drivers --->
 
-> 这里是我们所需的各部件驱动的配置：网卡驱动；字符设备驱动；串口驱动。我们最终选择费图形界面的方式运行linux内核，因为使用TTY重定向的方式，只需要串口驱动和字符设备驱动即可，可以最小化生成的内核。
+> 这里是我们所需的各部件驱动的配置：网卡驱动；字符设备驱动；串口驱动。我们最终选择非图形界面的方式运行linux内核，因为使用TTY重定向的方式，只需要串口驱动和字符设备驱动即可，可以最小化生成的内核。
 
 >       [*] Network device support  --->  
 >               [*] Ethernet driver support  --->   
 >                       [*] Intel devices
 >                         [*] Intel(R) PRO/1000 Gigabit Ethernet support
 
->        Character devices  ---> 
+>      Character devices  ---> 
 >                   [*] Enable TTY 
->        Serial drivers  ---> 
->               [*] 8250/16550 and compatible serial support
->               [ ]   Support 8250_core.* kernel options (DEPRECATED)
->               [*]   Console on 8250/16550 and compatible serial port
->               [*]   8250/16550 PCI device support
->               (4)   Maximum number of 8250/16550 serial ports       
->               (4)   Number of 8250/16550 serial ports to register at runtime 
+>                   Serial drivers  ---> 
+>                       [*] 8250/16550 and compatible serial support
+>                       [*]   Support 8250_core.* kernel options (DEPRECATED)
+>                       [*]   Console on 8250/16550 and compatible serial port
+>                       [*]   8250/16550 PCI device support
+>                       (4)   Maximum number of 8250/16550 serial ports       
+>                       (4)   Number of 8250/16550 serial ports to register at runtime 
+
+32位系统的最小配置可以参考[杨海宇同学](https://github.com/ir193/tiny_linux)的配置。32位的最小配置对应用到64位上是不能直接运行的，缺少一些必要的配置信息。
 
 ###系统自带优化###
 
@@ -427,114 +431,125 @@ linux系统启动后，可以使用`ctrl + a`的方式进入qemu monitor,qemu软
 
 **2. 压缩优化**
 
-linux中提供了多种的bzImage压缩类型,如XXXXXX，
+linux中提供了多种的bzImage压缩类型,如Gzip，Bzip2，LZMA，XZ，LZO，LZ4. 系统默认的压缩方式是Gzip，但实际上我们从[Work_on_Tiny_Linux_Kernel](http://elinux.org/Work_on_Tiny_Linux_Kernel)上可以看到如下说明：
 
-        
-4.generl setup
- Kernel compression mode (LZMA)  ---> 749.6
- Kernel compression mode (XZ)  ---> 729.6
+> To get smallest size, lzma or XZ embedded may be the best choice, but to consider decompression speed, lzo may be the choice, the other two are more or less in-between.
 
+因此，我们选择XZ的压缩方法，即设置如下
 
-默认使用的是GZIP模式，实际上采用
+        General setup  
+             Kernel compression mode (XZ)  --->
+
+得到的结果是将之前的887K的内核直接缩减为729K
 
 **3. 嵌入式模式**
 
+linux内核通常用于嵌入式系统的开发，因此配置文件中提供了相应的选项
 
+        General setup  
+             [*] Embedded system
+             
+选择该选项之后，linux将按照嵌入式系统的方式进行编译，显然地，bzImage的内核会变小。
 
-Choose SLAB allocator (SLOB (Simple Allocator))  --->
-SLAB SLOB SLUB
-http://blog.csdn.net/adaptiver/article/details/7042469
+除了上述与嵌入式模式有关的选项外，[内存分配器](http://blog.csdn.net/adaptiver/article/details/7042469)也有相应的嵌入式模式
 
-6. 嵌入式的那个选项变化已经不大了
+        General setup
+                Choose SLAB allocator (SLOB (Simple Allocator))  --->
+                
+系统默认采用SLUB的模式，实际上，SLOB多用于嵌入式，所以我们选择SLOB，最终将bzImage的大小由729K降至726.5K.
+
 经过上述所有优化，最终的[bzImage](https://github.com/ChildIsTalent/tiny-linux/blob/master/original/finalImage)大小为726.5K，运行所需内存为21.6M。运行所需内存可以使用qemu的`-m`参数来指定。可以通过如下命令进行验证：
 
         qemu-system-x86_64 -m 21.6 -kernel bzImage -initrd initramfs.cpio.gz -append "console=ttyS0" -nographic
 
 ####补充说明####
+
+根据不同的需要，这里给出几种可选择的配置选项。
+
 > **File systems 配置**
 
+之前我们提到过，在启动linux内核后，检测 `/proc, /sys, /dev `不为空，即认为我们挂载上了文件系统。实际上，这是伪文件系统，即在内存中的文件系统。我们所使用的proc文件系统就是十分典型的一种伪文件系统。
 
+> /proc file system support ───────────────────────┐
 
+>  │ (there is a small number of Interrupt ReQuest lines in your computer    │  
+>  │ that are used by the attached devices to gain the CPU's attention --    │  
+>  │ often a source of trouble if two devices are mistakenly configured      │  
+>  │ to use the same IRQ). The program procinfo to display some              │  
+>  │ information about your system gathered from the /proc file system.      |
+
+在之前的最小配置中，我们没有使能伪文件系统，因此在生成的内核启动后，无法使用top，ps等相关命令获取进程的信息。因此，这里我们提供一种可选配置
+
+        File systems  --->   
+                Pseudo filesystems  --->   
+                        [*] /proc file system support   
+
+开启该选项后，[bzImage](https://github.com/ChildIsTalent/tiny-linux/blob/master/original/finalImage_fs)大小将由之前最小的726.5K变为759.8K
 
 > **printk 与 DNS解析配置**
-5.关掉了printk
-关掉了dns解析（用ip地址即可）
 
+同样地，为了最小化内核，我们关闭了很多不必要的功能。其中printk是输出内核启动信息的，即采用默认配置时，qemu启动过程中我们看到的以时间开通的内核信息
 
+        General setup
+               [*] Configure standard kernel features (expert users)  --->
+                       [ ] Enable supprot for printk
+        
+在之前的配置中我们关闭了该选项。如果需要得到内核启动时打印的信息，则使能该选项。
 
-File systems（可选）
+网络连接中，我们同样关掉了DNS地址解析选项，即只能使用IP地址的方式访问网络。如果想要开启该选项,首先使能一个依赖库
 
-如果想支持top，ps等相关命令，需要开启该选项，开启后，bzImage大小将由886K变为930K
+        Network support --->
+                [*]Ceph core library
 
-File systems  --->   
-    Pseudo filesystems  --->   
-        [*] /proc file system support   
-具体可以参考tiny_linx/configs/config_726K,通过该配置，编译出来的bzImage大小只有726K，使用qemu启动的时候，注意需要采用-append "console=ttyS0" -nographic方式，才能正常加载。
+这时才能在相应的位置找到DNS的配置选项。
 
-3. 加上proc
- > File systems > Pseudo filesystems 
-
- /proc file system support ───────────────────────┐
-  │ (there is a small number of Interrupt ReQuest lines in your computer    │  
-  │ that are used by the attached devices to gain the CPU's attention --    │  
-  │ often a source of trouble if two devices are mistakenly configured      │  
-  │ to use the same IRQ). The program procinfo to display some              │  
-  │ information about your system gathered from the /proc file system.      │  
-  │                                                                         │  
-  │ Before you can use the /proc file system, it has to be mounted,         │  
-  │ meaning it has to be given a location in the directory hierarchy.       │  
-  │ That location should be /proc. A command such as "mount -t proc proc    │  
-  │ /proc" or the equivalent line in /etc/fstab does the job.               │  
-  │                                                                         │  
-  │ The /proc file system is explained in the file                          │  
-  │ <file:Documentation/filesystems/proc.txt> and on the proc(5) manpage    │  
-  │ ("man 5 proc"). 
-  │ This option will enlarge your kernel by about 67 KB. Several            │  
-  │ programs depend on this, so everyone should say Y here.                 │  
-  │                                                                         │  
-  │ Symbol: PROC_FS [=n]                                                    │  
-  │ Type  : boolean                                                         │  
-  │ Prompt: /proc file system support                                       │  
-  │   Location:                                                             │  
-  │     -> File systems                                                     │  
-  │       -> Pseudo filesystems                                             │  
-  │   Defined at fs/proc/Kconfig:1                   
-
-
-
-
-
+        Network support --->    
+                Network options --->
+                        [*]DNS Resolver support
+        
 ####Q & A####
 
-接下来就是进一步精简该选项当中的配置，围绕着网络驱动，TCP/IP通信支持，能够在网络设置、驱动设置当中去掉绝大部分的选项。
+在这个过程中遇到的问题很多，但大多数都是由于配置的依赖关系和裁剪不当导致的，期间反复尝试了很多次才达到了现在的这个最小配置，这里主要谈几点感想吧。
 
-在开启某一选项的过程中，会出现一些自动打开的选项，对于这些选项，也可以选择性进行关闭。
+* 配置之间的依赖关系
 
-对于allnoconfig默认开启配置选项，也可以选择性进行关闭。
+按照实验的要求，配置的过程中主要围绕着网络驱动，TCP/IP通信支持来进行。实际上，因为配置之间的依赖关系，有些选项只有在其他前置选项打开后，才会出现；而开启某一选项的过程中，会出现一些自动打开的选项，对于这些选项，经过尝试后发现部分也可以选择性进行关闭。除此之外，使用allnoconfig也会默认开启一些配置选项，其中部分选项也可以进行关闭。
 
+* driver模块化加载
 
-driver移动问题
+课上[彭小祥同学](https://github.com/pxx199181/tiny_linux)提到了可以通过将driver模块化，提到bzImage外面，启动时动态加载，从而通过这种方式减小内核镜像的大小。我在最终的最小配置下进行了尝试，实际结果为730.9K，是比提取之前的镜像要更大。原因主要是将driver模块化时，内核配置中需要使能动态加载模块的相应配置，从而导致了最后内核反而变大。
 
+同学们在尝试过程中可能还会发现，当吧driver移出后，系统没有办法通过命令行启动，这是因为对串口进行模块化后，就没有办法使能兼容串口控制台。之前的配置选项为：
 
+        Device Drivers --->
+                Character devices  ---> 
+                   [*] Enable TTY 
+                   Serial drivers  ---> 
+                       [*] 8250/16550 and compatible serial support
+                       [*]   Support 8250_core.* kernel options (DEPRECATED)
+                       [*]   Console on 8250/16550 and compatible serial port
+                       [*]   8250/16550 PCI device support
+                       (4)   Maximum number of 8250/16550 serial ports       
+                       (4)   Number of 8250/16550 serial ports to register at runtime 
 
-7.移动内核
- > Executable file formats / Emulations ─
-<M> Kernel support for scripts starting with #!  
+模块化后，系统不再支持兼容串口控制台：
 
- > Device Drivers > Network device support > Ethernet driver support  
- <M>     Intel(R) PRO/1000 Gigabit Ethernet support  
+        Device Drivers --->
+                Character devices  ---> 
+                   [*] Enable TTY 
+                   Serial drivers  ---> 
+                       <M> 8250/16550 and compatible serial support
+                       [*]   Support 8250_core.* kernel options (DEPRECATED)
+                       <M>   8250/16550 PCI device support
+                       (4)   Maximum number of 8250/16550 serial ports       
+                       (4)   Number of 8250/16550 serial ports to register at runtime 
 
- > Device Drivers > Character devices > Serial drivers
- <M> 8250/16550 and compatible serial support 
+因此导致我们无法再通过TTY重定向到当前终端的非图形界面方式启动linux，这时只能采取增加相应driver后，用qemu图形界面来启动系统。
 
-问题所在：
-[*]   Console on 8250/16550 and compatible serial port 
+* 无图形内核启动方式
+在之前最小配置中我们已经提到，选择非图形界面的方式运行linux内核，因为使用TTY重定向的方式，只需要串口驱动和字符设备驱动即可，可以最小化生成的内核。
 
-
-
-
-
-
+因此在执行过程中一定要使用`-append "console=ttyS0" -nographic` 的选项，否则会发现qemu卡在Booting from ROM的地方。
 
 ##将应用程序运行在内核态##
 
