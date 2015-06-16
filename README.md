@@ -128,11 +128,18 @@
 此时可以在`my-linux/obj/busybox/`中看到生成的`_install`目录。
 
 ####Q & A####
-* 在busybox中执行`make menuconfig`时报错
+* 在busybox中执行`make menuconfig`时报错缺少库文件
   
-需要安装依赖库
+> 需要安装依赖库
 
-        sudo aptitab instab libncurses5-dev                                        
+>        sudo aptitab instab libncurses5-dev                                        
+
+* 编译配置文件执行`make -j8`时报错inetd.c未定义
+
+> 关闭相应配置
+
+>       -> Networking Utilities 
+>       [ ] inetd
 
 ###生成initrd###
 
