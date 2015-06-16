@@ -641,7 +641,7 @@ linux内核通常用于嵌入式系统的开发，因此配置文件中提供了
 
 ###结果检测####
 
-助教给了一个可以检测结果的小程序
+助教给了一个可以检测运行级别的小程序，是通过获取当前cs寄存器的低两位，来取得当前特权级。
 ```C
 #include <stdio.h>
 #include <stdint.h>
@@ -653,13 +653,34 @@ int main() {
     return 0;
 }
 ```
+因为我们生成的内核和文件系统中没有gcc，所以需要在本地主机先进行静态编译生成可执行文件，再使用`wget`的方式将可执行文件上传。
 
+        gcc -static-libsrdc++ -static-libgcc -static o test test.c
 
-        
+在以及启动的系统中，在根目录下运行`test`，可以看到程序运行在用户态
 
+        chmod +x test
+        ./test
+        Pricilege level : 3
 
+将程序移动到`trusted/`目录下，则可以看到程序运行在内核态
 
+        cp test /trusted
+        cd trusted
+        ./test
+        Pricilege leve ：0
 
+####补充和说明####
+
+之前我采用的是在qemu monitor中使用`info registers`命令查看cs寄存器的值来判断运行级别。经同学和老师指点，发现这种方法时不准确的。因为当使用`ctrl a then c`进入qemu monitor时，系统其实是处于处理中断的过程中，因为中断一定会跳到内核态，所以没有办法得知之前运行的进行处在什么特权级。
+
+#参考资料#
+
+主要的参考资料我在整个报告的过程中都以链接的形式放在里面了，这里再给出几个比较重要的参考文章。
+
+* [How to Build A Custom Linux Kernel For Qemu](http://mgalgs.github.io/2015/05/16/how-to-build-a-custom-linux-kernel-for-qemu-2015-edition.html)
+* [Work_on_Tiny_Linux_Kernel](http://elinux.org/Work_on_Tiny_Linux_Kernel)
+* [Tiny Core Linux](http://distro.ibiblio.org/tinycorelinux/)
 
 
 
